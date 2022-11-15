@@ -5,3 +5,4 @@ measures.txt
 complexity-scores.txt
 mlc-morph.py
 __pycache__
+.gitignore

@@ -1,3 +1,21 @@
+# Measuring morphological complexity (reproduced)
+
+This is a forked repository for reproducing the results of the original codes.
+This repository also includes the results for some additional treebanks.
+`correlation-signif.py`, `wals-values.csv`, `correlation.py`, `dimreduction.py`, `wals-regression.py`, `plot-measures.py` are
+files from the original repository and they are not modified (and not necessary to reproduce the results themselves, either).
+Files that have been added in this forked repository are:
+- `mlc-morph_repr.py` for the main Python script to reproduce the morphological complexity;
+- `measures_gsd.txt` for the raw results of measuring complexities;
+- `calc_pearson.py` for calculating a Pearson correlation matrix among treebanks' complexities;
+- `measures_gsd_pearson.txt` for the Pearson correlation matrix among treebanks' complexities;
+- `conllu.py` for dealing with .conllu (UD) files.
+
+Note that you will also need UDtrack dataset to run the experiments.
+
+Original README.md by the original authors follows below.
+
+----
 # Measuring morphological complexity
 
 The scripts in this repository is mainly provided for aiding

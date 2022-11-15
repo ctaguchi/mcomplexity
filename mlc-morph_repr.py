@@ -1,7 +1,3 @@
-#!/usr/bin/env python3
-"""
-"""
-
 import sys
 import os.path
 from collections import Counter
@@ -12,73 +8,25 @@ import zlib
 import random
 import re
 import glob
+import time
 
 from conllu import conllu_sentences
 
+# filename = sys.argv[1]
 
-
-
-
-
-def score_file(fname, ctype='UD'):
-    nodes = []
-    if ctype == 'UD':
-        for sent in conllu_sentences(fname):
-            nodes.extend(sent.nodes[1:])
-    else: # PBC
-        nodes = read_pbc(fname)
-
-    ttr = []
-    msp = []
-    pos_ent = []
-    pos_count = []
-    feat_ent = []
-    feat_count = []
-    cent_form_feat = []
-    cent_feat_form = []
-
-    if ctype != 'UD':
-        msp = pe = pc = fe = fc = pos_ent = pos_count =\
-        feat_ent = feat_count = form_feat = feat_form =\
-        cent_form_feat = cent_feat_form = [0.0] * len(ttr)
-
-    return fname, (ttr, msp, pe, pc, fe, fc, pos_ent, pos_count, feat_ent,
-            feat_count, form_feat, feat_form, cent_form_feat, cent_feat_form)
-
-# 
-# fmt = "{}" + "{}{{}}".format(opt.separator) *16
-# print("# sample_size = {}, samples = {}".format(
-#     opt.sample_size, opt.samples))
-# print(fmt.format('fname', 'ttr', 'ttr_sd', 'msp', 'msp_sd',
-#     'pos_ent', 'pos_ent_sd', 'pos_types', 'pos_types_sd',
-#     'feat_ent', 'feat_ent_sd', 'feat_types', 'feat_types_sd',
-#     'cent_form_feat', 'cent_form_feat_sd',
-#     'cent_feat_form', 'cent_feat_form_sd'), flush=True)
-# 
-# for fname, (ttr, msp, pe, pc, fe, fc, pos_ent, pos_count, feat_ent, feat_count, form_feat, feat_form, cent_form_feat, cent_feat_form) in res:
-#     print(fmt.format(os.path.basename(fname).replace('.conllu', ''),
-#                      np.mean(ttr), np.std(ttr),
-#                      np.mean(msp), np.std(msp),
-#                      np.mean(pos_ent), np.std(pos_ent),
-#                      np.mean(pos_count), np.std(pos_count),
-#                      np.mean(feat_ent), np.std(feat_ent),
-#                      np.mean(feat_count), np.std(feat_count),
-#                      np.mean(cent_form_feat), np.std(cent_form_feat), 
-#                      np.mean(cent_feat_form), np.std(cent_feat_form)),
-#                      flush=True)
-# 
-# nodes = []
-# for sent in conllu_sentences(opt.files[0]):
-#     nodes.extend(sent.nodes[1:])
-# smpl = sample(nodes, opt.sample_size)
-# juola_complexity(nodes)
-
-def read_treebank(tbdir):
+def read_treebank(tbdir, ja=False):
     sentences = []
-    for tbf in glob.glob(tbdir + '/*.conllu'):
-        sentences.extend(conllu_sentences(tbf))
+    if ja:
+        # files = ["pud_tested_suw_1.conllu",
+        #     "pud_tested_suw_2.conllu",
+        #     "pud_tested_luw_1.conllu",
+        #     "pud_tested_luw_2.conllu"]
+        # for tbf in tbdir:
+        sentences.extend(conllu_sentences(tbdir))
+    else:
+        for tbf in glob.glob(tbdir + '/*.conllu'):
+            sentences.extend(conllu_sentences(tbf))
     return sentences
-
 
 def sample_nodes(sentences, sample_size=1000, random_sample=True,
         filter_num=True, filter_pos={'X', 'PUNCT'}):
@@ -120,24 +68,11 @@ def sample_nodes(sentences, sample_size=1000, random_sample=True,
 def get_ttr(sentences, sample_size=1000, random_sample=True,
         lowercase=True, filter_num=True, filter_pos={'X', 'PUNCT'},
         **kwargs):
-    """ Calculate the type/token ratio on a sample of the given treebank.
-
-    Arguments:
-    lowercase:      Convert the words to lowercase.
-
-    Other arguments are as defined in sample_nodes().
-
-    Return value is the type/token ratio over the sample.
-    """
     nodes = sample_nodes(sentences, sample_size=sample_size,
                  random_sample=random_sample,
                  filter_num=filter_num, filter_pos=filter_pos)
-
-
     if lowercase:
         words = [n.form.lower() for n in nodes]
-    else:
-        words = [n.form for n in nodes]
     return len(set(words)) / len(words)
 
 def get_msp(sentences, sample_size=1000, random_sample=True,
@@ -189,7 +124,7 @@ def get_wh_lh(sentences, sample_size=1000, random_sample=True,
         cwords = Counter((x.form for x in nodes))
     nlemmas = sum(clemmas.values())
     nwords = sum(cwords.values())
-    wh, lh = 0, 0
+    wh, lh = 0, 0 # init
     for w in cwords:
         p = cwords[w] / nwords
         wh -= p * np.log2(p)
@@ -234,7 +169,6 @@ def get_mfh(sentences, sample_size=1000, random_sample=True,
         p = cfeat[feat] / nfeat
         mfh -= p * np.log2(p)
     return mfh, ph
-
 
 def random_words(words, uniform=False):
     alphabet = {str(i):i for i in range(10)}
@@ -322,7 +256,6 @@ def get_wh(*args, **kwargs):
 def get_lh(*args, **kwargs):
     return get_wh_lh(*args, **kwargs)[1]
 
-
 measures = {
     'ttr':  ('Type/token ratio', get_ttr), 
     'msp':  ('Means size of paradigm', get_msp), 
@@ -333,60 +266,118 @@ measures = {
     'mfh':  ('Morphological feature entropy', get_mfh),
 }
 
-
-ap = argparse.ArgumentParser()
-ap.add_argument('treebanks', nargs='+')
-ap.add_argument('-j', '--nproc', default=1, type=int,
-                    help='number of processes')
-ap.add_argument('-s', '--samples', default=10, type=int,
-                    help='number of samples')
-ap.add_argument('-S', '--sample-size', default=1000, type=int)
-ap.add_argument('--separator', default='\t')
-ap.add_argument('-n', '--normalize', action='store_true')
-ap.add_argument('-m', '--measures', default='all',
-                    help='comma separated measures, or all')
-ap.add_argument('-o', '--output', default='measures.txt')
-args = ap.parse_args()
-
-if args.measures == 'all':
-    mlist = tuple(measures.keys())
-else:
-    mlist = args.measures.split(',')
-
 def get_score(jobdesc):
-    func = measures[jobdesc[0]][1]
+    func = measures[jobdesc[0]][1] # mc measure functions defined above
     tb = read_treebank(jobdesc[1])
     kwargs = jobdesc[2]
-    return jobdesc, func(tb,**kwargs)
+    print("Calculating scores for {}, {}...".format(jobdesc[1], func))
+    return jobdesc, func(tb, **kwargs)
 
-kwargs = {'sample_size': args.sample_size}
-joblist = []
-for m in mlist:
-    for tbdir in glob.glob(args.treebanks + "/UD_*/":
-        for _ in range(args.samples):
-            joblist.append((m, tbdir, kwargs))
+def get_score_ja(jobdesc):
+    func = measures[jobdesc[0]][1] # mc measure functions defined above
+    tb = read_treebank(jobdesc[1], ja=True)
+    kwargs = jobdesc[2]
+    print("Calculating scores for {}, {}...".format(jobdesc[1], func))
+    return jobdesc, func(tb, **kwargs)
 
-pool = Pool(processes=args.nproc)
-res = pool.map(get_score, joblist)
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument('treebanks', nargs='+')
+    ap.add_argument('-j', '--nproc', default=1, type=int,
+                        help='number of processes')
+    ap.add_argument('-s', '--samples', default=10, type=int,
+                        help='number of samples')
+    ap.add_argument('-S', '--sample-size', default=1000, type=int)
+    ap.add_argument('--separator', default='\t')
+    ap.add_argument('-n', '--normalize', action='store_true')
+    ap.add_argument('-m', '--measures', default='all',
+                        help='comma separated measures, or all')
+    ap.add_argument('-o', '--output', default='measures.txt')
+    ap.add_argument('-ja', '--japanese', default=False, type=bool)
+    args = ap.parse_args()
 
-scores = dict()
-for (m, tb, _), sc in res:
-    tb = os.path.basename(tb.rstrip('/')).replace('UD_','')
-    if (m, tb) not in scores:
-        scores[(m, tb)] = []
-    scores[(m, tb)].append(sc)
+    if args.measures == 'all':
+        mlist = tuple(measures.keys())
+    else:
+        mlist = args.measures.split(',')
 
-tblist = [os.path.basename(tb.rstrip('/')).replace('UD_','') \
-            for tb in args.treebanks]
-
-fmt = "\t{}" * (2*len(mlist))
-head = [x for pair in zip(mlist, (m + "_sd" for m in mlist)) for x in pair]
-with open(args.output, 'wt') as fp:
-    print("treebank", fmt.format(*head), file=fp)
-    for tb in tblist:
-        print(tb, end="", file=fp)
-        sclist = []
+    kwargs = {'sample_size': args.sample_size}
+    joblist = []
+    if args.japanese == False:
         for m in mlist:
-            sc = np.array(scores[(m,tb)])
-            sclist.extend((sc.mean(), sc.std()))
-        print(fmt.format(*sclist), file=fp)
+            for tbdir in glob.glob(args.treebanks[0] + "/UD_*/"):
+                for _ in range(args.samples):
+                    # joblist.append((m, tbdir, kwargs))
+                    joblist.append((m, tbdir, kwargs))
+    else:
+        files = ["../ud_ja_standardize/pud_tested_suw_1_romanized.conllu",
+            "../ud_ja_standardize/pud_tested_suw_2_romanized.conllu",
+            "../ud_ja_standardize/pud_tested_luw_1_romanized.conllu",
+            "../ud_ja_standardize/pud_tested_luw_2_romanized.conllu"]
+        for m in mlist:
+            for tbdir in files:
+                for _ in range(args.samples):
+                    joblist.append((m, tbdir, kwargs))
+
+    # print(joblist)
+    start = time.time()
+
+    pool = Pool(processes=args.nproc) # for parallel processing (faster?)
+    if args.japanese == False:
+        res = pool.map(get_score, joblist) # the second argument is iterable
+        print(res[1])
+    else:
+        res = pool.map(get_score_ja, joblist)
+        print(res[1])
+
+    scores = dict()
+    for (m, tb, _), sc in res:
+        tb = os.path.basename(tb.rstrip('/')).replace('UD_','')
+        if (m, tb) not in scores:
+            scores[(m, tb)] = []
+        scores[(m, tb)].append(sc)
+    print(scores)
+    print(time.time() - start)
+    
+    tblist = [os.path.basename(tb.rstrip('/')).replace('UD_','') \
+            for tb in glob.glob(args.treebanks[0] + "/UD_*/")]
+    ja_tb = ["pud_tested_suw_1_romanized.conllu",
+            "pud_tested_suw_2_romanized.conllu",
+            "pud_tested_luw_1_romanized.conllu",
+            "pud_tested_luw_2_romanized.conllu"]
+            
+    fmt = "\t{}" * (2*len(mlist))
+    head = [x for pair in zip(mlist, [m + "_sd" for m in mlist]) for x in pair]
+    with open(args.output, "wt") as fp:
+        print("treebank", fmt.format(*head), file=fp)
+        if args.japanese == False:
+            for tb in tblist:
+                print(tb, end="", file=fp)
+                sclist = []
+                for m in mlist:
+                    sc = np.array(scores[(m, tb)])
+                    sclist.extend((sc.mean(), sc.std()))
+                print(fmt.format(*sclist), file=fp)
+        else:
+            for tb in ja_tb:
+                print(tb, end="", file=fp)
+                sclist = []
+                for m in mlist:
+                    sc = np.array(scores[((m, tb))])
+                    sclist.extend((sc.mean(), sc.std()))
+                print(fmt.format(*sclist), file=fp)
+
+    # for job in joblist:
+    #     sentences = read_treebank(job)
+
+        # print("Type-Token Ratio (TTR)               : {}".format(get_ttr(sentences)))
+        # print("Mean Size of Paradigm (MSP)          : {}".format(get_msp(sentences)))
+        # wh, lh = get_wh_lh(sentences)
+        # print("Word Entropy (WH)                    : {}".format(wh))
+        # print("Lemma Entropy (LH)                   : {}".format(lh))
+        # print("Morphological Feature Entropy (MFH)  : {}".format(get_mfh(sentences)[0]))
+        # print("Information in Word Structure (WS)   : {}".format(get_ws(sentences)))
+        # print("Inflectional Synthesis (IS)          : {}".format(get_is(sentences)))
+
+    # elapsed = time.time() - start
+    # print(elapsed) 
